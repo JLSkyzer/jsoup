@@ -430,4 +430,10 @@ Writing Output: C:\Users\killi\Desktop\Dev\minecraft mod project\jsoup\build\reo
   org/jsoup/select/StructuralEvaluator$Root.class
   org/jsoup/select/StructuralEvaluator.class
   org/jsoup/select/package-info.class
+  org/jspecify/
+  org/jspecify/annotations/
+  org/jspecify/annotations/NonNull.class
+  org/jspecify/annotations/NullMarked.class
+  org/jspecify/annotations/NullUnmarked.class
+  org/jspecify/annotations/Nullable.class
   pack.mcmeta
