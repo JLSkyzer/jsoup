@@ -2,7 +2,12 @@ package org.jsoup;
 
 import java.io.IOException;
 
-public class UncheckedIOException extends RuntimeException {
+/**
+ * @deprecated Use {@link java.io.UncheckedIOException} instead. This class acted as a compatibility shim for Java
+ * versions prior to 1.8.
+ */
+@Deprecated
+public class UncheckedIOException extends java.io.UncheckedIOException {
     public UncheckedIOException(IOException cause) {
         super(cause);
     }
@@ -12,6 +17,6 @@ public class UncheckedIOException extends RuntimeException {
     }
 
     public IOException ioException() {
-        return (IOException) getCause();
+        return getCause();
     }
 }

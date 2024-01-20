@@ -2,10 +2,11 @@ package org.jsoup.nodes;
 
 import org.jsoup.SerializationException;
 import org.jsoup.helper.Validate;
+import org.jsoup.internal.Normalizer;
 import org.jsoup.internal.StringUtil;
 import org.jsoup.nodes.Document.OutputSettings.Syntax;
+import org.jspecify.annotations.Nullable;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
@@ -55,6 +56,7 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
      Get the attribute key.
      @return the attribute key
      */
+    @Override
     public String getKey() {
         return key;
     }
@@ -69,8 +71,17 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
         Validate.notEmpty(key); // trimming could potentially make empty, so validate here
         if (parent != null) {
             int i = parent.indexOfKey(this.key);
-            if (i != Attributes.NotFound)
+            if (i != Attributes.NotFound) {
+                String oldKey = parent.keys[i];
                 parent.keys[i] = key;
+
+                // if tracking source positions, update the key in the range map
+                Map<String, Range.AttributeRange> ranges = parent.getRanges();
+                if (ranges != null) {
+                    Range.AttributeRange range = ranges.remove(oldKey);
+                    ranges.put(key, range);
+                }
+            }
         }
         this.key = key;
     }
@@ -79,6 +90,7 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
      Get the attribute value. Will return an empty string if the value is not set.
      @return the attribute value
      */
+    @Override
     public String getValue() {
         return Attributes.checkNotNull(val);
     }
@@ -96,7 +108,7 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
      @param val the new attribute value; may be null (to set an enabled boolean attribute)
      @return the previous value (if was null; an empty string)
      */
-    public String setValue(@Nullable String val) {
+    @Override public String setValue(@Nullable String val) {
         String oldVal = this.val;
         if (parent != null) {
             int i = parent.indexOfKey(this.key);
@@ -124,6 +136,23 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
         return StringUtil.releaseBuilder(sb);
     }
 
+    /**
+     Get the source ranges (start to end positions) in the original input source from which this attribute's <b>name</b>
+     and <b>value</b> were parsed.
+     <p>Position tracking must be enabled prior to parsing the content.</p>
+     @return the ranges for the attribute's name and value, or {@code untracked} if the attribute does not exist or its range
+     was not tracked.
+     @see org.jsoup.parser.Parser#setTrackPosition(boolean)
+     @see Attributes#sourceRange(String)
+     @see Node#sourceRange()
+     @see Element#endSourceRange()
+     @since 1.17.1
+     */
+    public Range.AttributeRange sourceRange() {
+        if (parent == null) return Range.AttributeRange.UntrackedAttr;
+        return parent.sourceRange(key);
+    }
+
     protected void html(Appendable accum, Document.OutputSettings out) throws IOException {
         html(key, val, accum, out);
     }
@@ -139,7 +168,7 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
         accum.append(key);
         if (!shouldCollapseAttribute(key, val, out)) {
             accum.append("=\"");
-            Entities.escape(accum, Attributes.checkNotNull(val) , out, true, false, false);
+            Entities.escape(accum, Attributes.checkNotNull(val) , out, true, false, false, false);
             accum.append('"');
         }
     }
@@ -211,7 +240,7 @@ public class Attribute implements Map.Entry<String, String>, Cloneable  {
      * Checks if this attribute name is defined as a boolean attribute in HTML5
      */
     public static boolean isBooleanAttribute(final String key) {
-        return Arrays.binarySearch(booleanAttributes, key) >= 0;
+        return Arrays.binarySearch(booleanAttributes, Normalizer.lowerCase(key)) >= 0;
     }
 
     @Override

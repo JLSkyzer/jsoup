@@ -3,16 +3,17 @@ package org.jsoup;
 import org.jsoup.helper.DataUtil;
 import org.jsoup.helper.HttpConnection;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.jsoup.parser.Parser;
 import org.jsoup.safety.Cleaner;
 import org.jsoup.safety.Safelist;
-import org.jsoup.safety.Whitelist;
+import org.jspecify.annotations.Nullable;
 
-import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Path;
 
 /**
  The core public access point to the jsoup functionality.
@@ -143,10 +144,27 @@ Connection con3 = session.newRequest();
      @return sane HTML
 
      @throws IOException if the file could not be found, or read, or if the charsetName is invalid.
-     @see #parse(File, String, String)
+     @see #parse(File, String, String) parse(file, charset, baseUri)
      */
     public static Document parse(File file, @Nullable String charsetName) throws IOException {
         return DataUtil.load(file, charsetName, file.getAbsolutePath());
+    }
+
+    /**
+     Parse the contents of a file as HTML. The location of the file is used as the base URI to qualify relative URLs.
+     The charset used to read the file will be determined by the byte-order-mark (BOM), or a {@code <meta charset>} tag,
+     or if neither is present, will be {@code UTF-8}.
+
+     <p>This is the equivalent of calling {@link #parse(File, String) parse(file, null)}</p>
+
+     @param file the file to load HTML from. Supports gzipped files (ending in .z or .gz).
+     @return sane HTML
+     @throws IOException if the file could not be found or read.
+     @see #parse(File, String, String) parse(file, charset, baseUri)
+     @since 1.15.1
+     */
+    public static Document parse(File file) throws IOException {
+        return DataUtil.load(file, null, file.getAbsolutePath());
     }
 
     /**
@@ -166,10 +184,76 @@ Connection con3 = session.newRequest();
         return DataUtil.load(file, charsetName, baseUri, parser);
     }
 
+    /**
+     Parse the contents of a file as HTML.
+
+     @param path          file to load HTML from. Supports gzipped files (ending in .z or .gz).
+     @param charsetName (optional) character set of file contents. Set to {@code null} to determine from {@code http-equiv} meta tag, if
+     present, or fall back to {@code UTF-8} (which is often safe to do).
+     @param baseUri     The URL where the HTML was retrieved from, to resolve relative links against.
+     @return sane HTML
+
+     @throws IOException if the file could not be found, or read, or if the charsetName is invalid.
+     @since 1.18.1
+     */
+    public static Document parse(Path path, @Nullable String charsetName, String baseUri) throws IOException {
+        return DataUtil.load(path, charsetName, baseUri);
+    }
+
+    /**
+     Parse the contents of a file as HTML. The location of the file is used as the base URI to qualify relative URLs.
+
+     @param path        file to load HTML from. Supports gzipped files (ending in .z or .gz).
+     @param charsetName (optional) character set of file contents. Set to {@code null} to determine from {@code http-equiv} meta tag, if
+     present, or fall back to {@code UTF-8} (which is often safe to do).
+     @return sane HTML
+
+     @throws IOException if the file could not be found, or read, or if the charsetName is invalid.
+     @see #parse(File, String, String) parse(file, charset, baseUri)
+     @since 1.18.1
+     */
+    public static Document parse(Path path, @Nullable String charsetName) throws IOException {
+        return DataUtil.load(path, charsetName, path.toAbsolutePath().toString());
+    }
+
+    /**
+     Parse the contents of a file as HTML. The location of the file is used as the base URI to qualify relative URLs.
+     The charset used to read the file will be determined by the byte-order-mark (BOM), or a {@code <meta charset>} tag,
+     or if neither is present, will be {@code UTF-8}.
+
+     <p>This is the equivalent of calling {@link #parse(File, String) parse(file, null)}</p>
+
+     @param path the file to load HTML from. Supports gzipped files (ending in .z or .gz).
+     @return sane HTML
+     @throws IOException if the file could not be found or read.
+     @see #parse(Path, String, String) parse(file, charset, baseUri)
+     @since 1.18.1
+     */
+    public static Document parse(Path path) throws IOException {
+        return DataUtil.load(path, null, path.toAbsolutePath().toString());
+    }
+
+    /**
+     Parse the contents of a file as HTML.
+
+     @param path          file to load HTML from. Supports gzipped files (ending in .z or .gz).
+     @param charsetName (optional) character set of file contents. Set to {@code null} to determine from {@code http-equiv} meta tag, if
+     present, or fall back to {@code UTF-8} (which is often safe to do).
+     @param baseUri     The URL where the HTML was retrieved from, to resolve relative links against.
+     @param parser alternate {@link Parser#xmlParser() parser} to use.
+     @return sane HTML
+
+     @throws IOException if the file could not be found, or read, or if the charsetName is invalid.
+     @since 1.18.1
+     */
+    public static Document parse(Path path, @Nullable String charsetName, String baseUri, Parser parser) throws IOException {
+        return DataUtil.load(path, charsetName, baseUri, parser);
+    }
+
      /**
      Read an input stream, and parse it to a Document.
 
-     @param in          input stream to read. Make sure to close it after parsing.
+     @param in          input stream to read. The stream will be closed after reading.
      @param charsetName (optional) character set of file contents. Set to {@code null} to determine from {@code http-equiv} meta tag, if
      present, or fall back to {@code UTF-8} (which is often safe to do).
      @param baseUri     The URL where the HTML was retrieved from, to resolve relative links against.
@@ -265,15 +349,6 @@ Connection con3 = session.newRequest();
     }
 
     /**
-     Use {@link #clean(String, String, Safelist)} instead.
-     @deprecated as of 1.14.1.
-     */
-    @Deprecated
-    public static String clean(String bodyHtml, String baseUri, Whitelist safelist) {
-        return clean(bodyHtml, baseUri, (Safelist) safelist);
-    }
-
-    /**
      Get safe HTML from untrusted input HTML, by parsing input HTML and filtering it through a safe-list of permitted
      tags and attributes.
 
@@ -282,6 +357,22 @@ Connection con3 = session.newRequest();
      the {@link Jsoup#clean(String html, String baseHref, Safelist)} method instead, and enable
      {@link Safelist#preserveRelativeLinks(boolean)}.</p>
 
+     <p>Note that the output of this method is still <b>HTML</b> even when using the TextNode only
+     {@link Safelist#none()}, and so any HTML entities in the output will be appropriately escaped.
+     If you want plain text, not HTML, you should use a text method such as {@link Element#text()} instead, after
+     cleaning the document.</p>
+     <p>Example:</p>
+     <pre>{@code
+     String sourceBodyHtml = "<p>5 is &lt; 6.</p>";
+     String html = Jsoup.clean(sourceBodyHtml, Safelist.none());
+
+     Cleaner cleaner = new Cleaner(Safelist.none());
+     String text = cleaner.clean(Jsoup.parse(sourceBodyHtml)).text();
+
+     // html is: 5 is &lt; 6.
+     // text is: 5 is < 6.
+     }</pre>
+
      @param bodyHtml input untrusted HTML (body fragment)
      @param safelist list of permitted HTML elements
      @return safe HTML (body fragment)
@@ -289,15 +380,6 @@ Connection con3 = session.newRequest();
      */
     public static String clean(String bodyHtml, Safelist safelist) {
         return clean(bodyHtml, "", safelist);
-    }
-
-    /**
-     Use {@link #clean(String, Safelist)} instead.
-     @deprecated as of 1.14.1.
-     */
-    @Deprecated
-    public static String clean(String bodyHtml, Whitelist safelist) {
-        return clean(bodyHtml, (Safelist) safelist);
     }
 
     /**
@@ -323,17 +405,20 @@ Connection con3 = session.newRequest();
     }
 
     /**
-     Use {@link #clean(String, String, Safelist, Document.OutputSettings)} instead.
-     @deprecated as of 1.14.1.
-     */
-    @Deprecated
-    public static String clean(String bodyHtml, String baseUri, Whitelist safelist, Document.OutputSettings outputSettings) {
-        return clean(bodyHtml, baseUri, (Safelist) safelist, outputSettings);
-    }
-
-    /**
      Test if the input body HTML has only tags and attributes allowed by the Safelist. Useful for form validation.
-     <p>The input HTML should still be run through the cleaner to set up enforced attributes, and to tidy the output.
+     <p>
+     This method is intended to be used in a user interface as a validator for user input. Note that regardless of the
+     output of this method, the input document <b>must always</b> be normalized using a method such as
+     {@link #clean(String, String, Safelist)}, and the result of that method used to store or serialize the document
+     before later reuse such as presentation to end users. This ensures that enforced attributes are set correctly, and
+     that any differences between how a given browser and how jsoup parses the input HTML are normalized.
+     </p>
+     <p>Example:</p>
+     <pre>{@code
+     Safelist safelist = Safelist.relaxed();
+     boolean isValid = Jsoup.isValid(sourceBodyHtml, safelist);
+     String normalizedHtml = Jsoup.clean(sourceBodyHtml, "https://example.com/", safelist);
+     }</pre>
      <p>Assumes the HTML is a body fragment (i.e. will be used in an existing HTML document body.)
      @param bodyHtml HTML to test
      @param safelist safelist to test against
@@ -343,14 +428,4 @@ Connection con3 = session.newRequest();
     public static boolean isValid(String bodyHtml, Safelist safelist) {
         return new Cleaner(safelist).isValidBodyHtml(bodyHtml);
     }
-
-    /**
-     Use {@link #isValid(String, Safelist)} instead.
-     @deprecated as of 1.14.1.
-     */
-    @Deprecated
-    public static boolean isValid(String bodyHtml, Whitelist safelist) {
-        return isValid(bodyHtml, (Safelist) safelist);
-    }
-    
 }

@@ -36,26 +36,6 @@ public class TokenQueue {
     }
 
     /**
-     * Retrieves but does not remove the first character from the queue.
-     * @return First character, or 0 if empty.
-     *@deprecated unused and will be removed in 1.15.x
-     */
-    @Deprecated
-    public char peek() {
-        return isEmpty() ? 0 : queue.charAt(pos);
-    }
-
-    /**
-     Add a character to the start of the queue (will be the next character retrieved).
-     @param c character to add
-     @deprecated unused and will be removed in 1.15.x
-     */
-    @Deprecated
-    public void addFirst(Character c) {
-        addFirst(c.toString());
-    }
-
-    /**
      Add a string to the start of the queue.
      @param seq string to add.
      */
@@ -73,18 +53,6 @@ public class TokenQueue {
     public boolean matches(String seq) {
         return queue.regionMatches(true, pos, seq, 0, seq.length());
     }
-
-    /**
-     * Case sensitive match test.
-     * @param seq string to case sensitively check for
-     * @return true if matched, false if not
-     * @deprecated unused and will be removed in 1.15.x
-     */
-    @Deprecated
-    public boolean matchesCS(String seq) {
-        return queue.startsWith(seq, pos);
-    }
-    
 
     /**
      Tests if the next characters match any of the sequences. Case insensitive.
@@ -108,15 +76,6 @@ public class TokenQueue {
                 return true;
         }
         return false;
-    }
-
-    /**
-     @deprecated unused and will be removed in 1.15.x
-     */
-    @Deprecated
-    public boolean matchesStartTag() {
-        // micro opt for matching "<x"
-        return (remainingLength() >= 2 && queue.charAt(pos) == '<' && Character.isLetter(queue.charAt(pos+1)));
     }
 
     /**
@@ -228,7 +187,7 @@ public class TokenQueue {
      @return consumed string   
      */
     // todo: method name. not good that consumeTo cares for case, and consume to any doesn't. And the only use for this
-    // is is a case sensitive time...
+    // is a case sensitive time...
     public String consumeToAny(String... seq) {
         int start = pos;
         while (!isEmpty() && !matchesAny(seq)) {
@@ -323,12 +282,31 @@ public class TokenQueue {
         char last = 0;
         for (char c : in.toCharArray()) {
             if (c == ESC) {
-                if (last == ESC)
+                if (last == ESC) {
                     out.append(c);
+                    c = 0;
+                }
             }
             else 
                 out.append(c);
             last = c;
+        }
+        return StringUtil.releaseBuilder(out);
+    }
+
+    /*
+    Given a CSS identifier (such as a tag, ID, or class), escape any CSS special characters that would otherwise not be
+    valid in a selector.
+     */
+    public static String escapeCssIdentifier(String in) {
+        StringBuilder out = StringUtil.borrowBuilder();
+        TokenQueue q = new TokenQueue(in);
+        while (!q.isEmpty()) {
+            if (q.matchesCssIdentifier(ElementSelectorChars)) {
+                out.append(q.consume());
+            } else {
+                out.append(ESC).append(q.consume());
+            }
         }
         return StringUtil.releaseBuilder(out);
     }
@@ -356,21 +334,7 @@ public class TokenQueue {
             pos++;
         return queue.substring(start, pos);
     }
-    
-    /**
-     * Consume an tag name off the queue (word or :, _, -)
-     * 
-     * @return tag name
-     * @deprecated unused and will be removed in 1.15.x
-     */
-    @Deprecated
-    public String consumeTagName() {
-        int start = pos;
-        while (!isEmpty() && (matchesWord() || matchesAny(':', '_', '-')))
-            pos++;
-        
-        return queue.substring(start, pos);
-    }
+
     
     /**
      * Consume a CSS element selector (tag name, but | instead of : for namespaces (or *| for wildcard namespace), to not conflict with :pseudo selects).
@@ -378,12 +342,9 @@ public class TokenQueue {
      * @return tag name
      */
     public String consumeElementSelector() {
-        int start = pos;
-        while (!isEmpty() && (matchesWord() || matchesAny("*|","|", "_", "-")))
-            pos++;
-        
-        return queue.substring(start, pos);
+        return consumeEscapedCssIdentifier(ElementSelectorChars);
     }
+    private static final String[] ElementSelectorChars = {"*|", "|", "_", "-"};
 
     /**
      Consume a CSS identifier (ID or class) off the queue (letter, digit, -, _)
@@ -391,25 +352,31 @@ public class TokenQueue {
      @return identifier
      */
     public String consumeCssIdentifier() {
-        int start = pos;
-        while (!isEmpty() && (matchesWord() || matchesAny('-', '_')))
-            pos++;
+        return consumeEscapedCssIdentifier(CssIdentifierChars);
+    }
+    private static final String[] CssIdentifierChars = {"-", "_"};
 
-        return queue.substring(start, pos);
+
+    private String consumeEscapedCssIdentifier(String... matches) {
+        int start = pos;
+        boolean escaped = false;
+        while (!isEmpty()) {
+            if (queue.charAt(pos) == ESC && remainingLength() >1 ) {
+                escaped = true;
+                pos+=2; // skip the escape and the escaped
+            } else if (matchesCssIdentifier(matches)) {
+                pos++;
+            } else {
+                break;
+            }
+        }
+
+        String consumed = queue.substring(start, pos);
+        return escaped ? unescape(consumed) : consumed;
     }
 
-    /**
-     Consume an attribute key off the queue (letter, digit, -, _, :")
-     @return attribute key
-     @deprecated unused and will be removed in 1.15.x
-     */
-    @Deprecated
-    public String consumeAttributeKey() {
-        int start = pos;
-        while (!isEmpty() && (matchesWord() || matchesAny('-', '_', ':')))
-            pos++;
-        
-        return queue.substring(start, pos);
+    private boolean matchesCssIdentifier(String... matches) {
+        return matchesWord() || matchesAny(matches);
     }
 
     /**
